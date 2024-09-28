@@ -1,0 +1,251 @@
+From d509f42af23cfdc3322177afd8f04b7c23930b7f Mon Sep 17 00:00:00 2001
+From: Ivan Trubach <mr.trubach@icloud.com>
+Date: Fri, 27 Sep 2024 14:02:26 +0300
+Subject: [PATCH] network/wireguard: add support for AmneziaWG
+
+---
+ src/basic/linux/wireguard.h                   | 35 ++++++++++++++-
+ .../sd-netlink/netlink-types-genl.c           | 10 +++++
+ src/network/netdev/netdev-gperf.gperf         | 10 +++++
+ src/network/netdev/wireguard.c                | 44 ++++++++++++++++++-
+ src/network/netdev/wireguard.h                | 11 +++++
+ 5 files changed, 108 insertions(+), 2 deletions(-)
+
+diff --git a/src/basic/linux/wireguard.h b/src/basic/linux/wireguard.h
+index ae88be14c9..2270094d47 100644
+--- a/src/basic/linux/wireguard.h
++++ b/src/basic/linux/wireguard.h
+@@ -49,9 +49,19 @@
+  *                    ...
+  *                ...
+  *            WGPEER_A_PROTOCOL_VERSION: NLA_U32
++ *            WGPEER_A_ADVANCED_SECURITY: NLA_FLAG
+  *        0: NLA_NESTED
+  *            ...
+  *        ...
++ *    WGDEVICE_A_JC: NLA_U16
++ *    WGDEVICE_A_JMIN: NLA_U16
++ *    WGDEVICE_A_JMAX: NLA_U16
++ *    WGDEVICE_A_S1: NLA_U16
++ *    WGDEVICE_A_S2: NLA_U16
++ *    WGDEVICE_A_H1: NLA_U32
++ *    WGDEVICE_A_H2: NLA_U32
++ *    WGDEVICE_A_H3: NLA_U32
++ *    WGDEVICE_A_H4: NLA_U32
+  *
+  * It is possible that all of the allowed IPs of a single peer will not
+  * fit within a single netlink message. In that case, the same peer will
+@@ -111,9 +121,21 @@
+  *                                       most recent protocol will be used when
+  *                                       this is unset. Otherwise, must be set
+  *                                       to 1.
++ *            WGPEER_A_ADVANCED_SECURITY: NLA_FLAG, flag indicating that
++ *                                        advanced security techniques provided
++ *                                        by AmneziaWG should be used.
+  *        0: NLA_NESTED
+  *            ...
+  *        ...
++ *    WGDEVICE_A_JC: NLA_U16, junk packet count (Jc)
++ *    WGDEVICE_A_JMIN: NLA_U16, junk packet minimum size (Jmin)
++ *    WGDEVICE_A_JMAX: NLA_U16, junk packet maximum size (Jmax)
++ *    WGDEVICE_A_S1: NLA_U16, init packet junk size (S1)
++ *    WGDEVICE_A_S2: NLA_U16, response packet junk size (S2)
++ *    WGDEVICE_A_H1: NLA_U32, init packet magic header (H1)
++ *    WGDEVICE_A_H2: NLA_U32, response packet magic header (H2)
++ *    WGDEVICE_A_H3: NLA_U32, cookie packet magic header (H3)
++ *    WGDEVICE_A_H4: NLA_U32, transport packet magic header (H4)
+  *
+  * It is possible that the amount of configuration data exceeds that of
+  * the maximum message length accepted by the kernel. In that case, several
+@@ -157,6 +179,15 @@ enum wgdevice_attribute {
+ 	WGDEVICE_A_LISTEN_PORT,
+ 	WGDEVICE_A_FWMARK,
+ 	WGDEVICE_A_PEERS,
++	WGDEVICE_A_JC,
++	WGDEVICE_A_JMIN,
++	WGDEVICE_A_JMAX,
++	WGDEVICE_A_S1,
++	WGDEVICE_A_S2,
++	WGDEVICE_A_H1,
++	WGDEVICE_A_H2,
++	WGDEVICE_A_H3,
++	WGDEVICE_A_H4,
+ 	__WGDEVICE_A_LAST
+ };
+ #define WGDEVICE_A_MAX (__WGDEVICE_A_LAST - 1)
+@@ -165,8 +196,9 @@ enum wgpeer_flag {
+ 	WGPEER_F_REMOVE_ME = 1U << 0,
+ 	WGPEER_F_REPLACE_ALLOWEDIPS = 1U << 1,
+ 	WGPEER_F_UPDATE_ONLY = 1U << 2,
++	WGPEER_F_SET_ADVANCED_SECURITY = 1U << 3,
+ 	__WGPEER_F_ALL = WGPEER_F_REMOVE_ME | WGPEER_F_REPLACE_ALLOWEDIPS |
+-			 WGPEER_F_UPDATE_ONLY
++			 WGPEER_F_UPDATE_ONLY | WGPEER_F_SET_ADVANCED_SECURITY
+ };
+ enum wgpeer_attribute {
+ 	WGPEER_A_UNSPEC,
+@@ -180,6 +212,7 @@ enum wgpeer_attribute {
+ 	WGPEER_A_TX_BYTES,
+ 	WGPEER_A_ALLOWEDIPS,
+ 	WGPEER_A_PROTOCOL_VERSION,
++	WGPEER_A_ADVANCED_SECURITY,
+ 	__WGPEER_A_LAST
+ };
+ #define WGPEER_A_MAX (__WGPEER_A_LAST - 1)
+diff --git a/src/libsystemd/sd-netlink/netlink-types-genl.c b/src/libsystemd/sd-netlink/netlink-types-genl.c
+index 226ac865c9..140803c231 100644
+--- a/src/libsystemd/sd-netlink/netlink-types-genl.c
++++ b/src/libsystemd/sd-netlink/netlink-types-genl.c
+@@ -218,6 +218,7 @@ static const NLAPolicy genl_wireguard_peer_policies[] = {
+         [WGPEER_A_PERSISTENT_KEEPALIVE_INTERVAL] = BUILD_POLICY(U16),
+         [WGPEER_A_ENDPOINT]                      = BUILD_POLICY(SOCKADDR),
+         [WGPEER_A_ALLOWEDIPS]                    = BUILD_POLICY_NESTED(genl_wireguard_allowedip),
++        [WGPEER_A_ADVANCED_SECURITY]             = BUILD_POLICY(FLAG),
+ };
+ 
+ DEFINE_POLICY_SET(genl_wireguard_peer);
+@@ -230,6 +231,15 @@ static const NLAPolicy genl_wireguard_policies[] = {
+         [WGDEVICE_A_LISTEN_PORT] = BUILD_POLICY(U16),
+         [WGDEVICE_A_FWMARK]      = BUILD_POLICY(U32),
+         [WGDEVICE_A_PEERS]       = BUILD_POLICY_NESTED(genl_wireguard_peer),
++        [WGDEVICE_A_JC]          = BUILD_POLICY(U16),
++        [WGDEVICE_A_JMIN]        = BUILD_POLICY(U16),
++        [WGDEVICE_A_JMAX]        = BUILD_POLICY(U16),
++        [WGDEVICE_A_S1]          = BUILD_POLICY(U16),
++        [WGDEVICE_A_S2]          = BUILD_POLICY(U16),
++        [WGDEVICE_A_H1]          = BUILD_POLICY(U32),
++        [WGDEVICE_A_H2]          = BUILD_POLICY(U32),
++        [WGDEVICE_A_H3]          = BUILD_POLICY(U32),
++        [WGDEVICE_A_H4]          = BUILD_POLICY(U32),
+ };
+ 
+ /***************** genl families *****************/
+diff --git a/src/network/netdev/netdev-gperf.gperf b/src/network/netdev/netdev-gperf.gperf
+index be010665c5..7dd8c22a6d 100644
+--- a/src/network/netdev/netdev-gperf.gperf
++++ b/src/network/netdev/netdev-gperf.gperf
+@@ -245,6 +245,15 @@ WireGuard.FwMark,                         config_parse_unsigned,
+ WireGuard.ListenPort,                     config_parse_wireguard_listen_port,        0,                             offsetof(Wireguard, port)
+ WireGuard.PrivateKey,                     config_parse_wireguard_private_key,        0,                             0
+ WireGuard.PrivateKeyFile,                 config_parse_wireguard_private_key_file,   0,                             0
++WireGuard.Jc,                             config_parse_uint16,                       0,                             offsetof(Wireguard, jc)
++WireGuard.Jmin,                           config_parse_uint16,                       0,                             offsetof(Wireguard, jmin)
++WireGuard.Jmax,                           config_parse_uint16,                       0,                             offsetof(Wireguard, jmax)
++WireGuard.S1,                             config_parse_uint16,                       0,                             offsetof(Wireguard, s1)
++WireGuard.S2,                             config_parse_uint16,                       0,                             offsetof(Wireguard, s2)
++WireGuard.H1,                             config_parse_uint32,                       0,                             offsetof(Wireguard, h1)
++WireGuard.H2,                             config_parse_uint32,                       0,                             offsetof(Wireguard, h2)
++WireGuard.H3,                             config_parse_uint32,                       0,                             offsetof(Wireguard, h3)
++WireGuard.H4,                             config_parse_uint32,                       0,                             offsetof(Wireguard, h4)
+ WireGuard.RouteTable,                     config_parse_wireguard_route_table,        0,                             offsetof(Wireguard, route_table)
+ WireGuard.RouteMetric,                    config_parse_wireguard_route_priority,     0,                             offsetof(Wireguard, route_priority)
+ WireGuardPeer.AllowedIPs,                 config_parse_wireguard_allowed_ips,        0,                             0
+@@ -254,6 +263,7 @@ WireGuardPeer.PublicKeyFile,              config_parse_wireguard_peer_key_file,
+ WireGuardPeer.PresharedKey,               config_parse_wireguard_peer_key,           0,                             0
+ WireGuardPeer.PresharedKeyFile,           config_parse_wireguard_peer_key_file,      0,                             0
+ WireGuardPeer.PersistentKeepalive,        config_parse_wireguard_keepalive,          0,                             0
++WireGuardPeer.AdvancedSecurity,           config_parse_bool,                         0,                             offsetof(WireguardPeer, advanced_security)
+ WireGuardPeer.RouteTable,                 config_parse_wireguard_peer_route_table,   0,                             0
+ WireGuardPeer.RouteMetric,                config_parse_wireguard_peer_route_priority,0,                             0
+ Xfrm.InterfaceId,                         config_parse_uint32,                       0,                             offsetof(Xfrm, if_id)
+diff --git a/src/network/netdev/wireguard.c b/src/network/netdev/wireguard.c
+index 9715cf4034..b740bc6e08 100644
+--- a/src/network/netdev/wireguard.c
++++ b/src/network/netdev/wireguard.c
+@@ -97,7 +97,7 @@ static int wireguard_peer_new_static(Wireguard *w, const char *filename, unsigne
+                 return -ENOMEM;
+ 
+         *peer = (WireguardPeer) {
+-                .flags = WGPEER_F_REPLACE_ALLOWEDIPS,
++                .flags = WGPEER_F_REPLACE_ALLOWEDIPS | WGPEER_F_SET_ADVANCED_SECURITY,
+                 .wireguard = w,
+                 .section = TAKE_PTR(n),
+         };
+@@ -191,6 +191,12 @@ static int wireguard_set_peer_one(NetDev *netdev, sd_netlink_message *message, c
+                         if (r < 0)
+                                 goto cancel;
+                 }
++
++                if (peer->advanced_security) {
++                        r = sd_netlink_message_append_flag(message, WGPEER_A_ADVANCED_SECURITY);
++                        if (r < 0)
++                                goto cancel;
++                }
+         }
+ 
+         r = sd_netlink_message_open_container(message, WGPEER_A_ALLOWEDIPS);
+@@ -263,6 +269,42 @@ static int wireguard_set_interface(NetDev *netdev) {
+                         r = sd_netlink_message_append_u32(message, WGDEVICE_A_FLAGS, w->flags);
+                         if (r < 0)
+                                 return log_netdev_error_errno(netdev, r, "Could not append wireguard flags: %m");
++
++                        r = sd_netlink_message_append_u16(message, WGDEVICE_A_JC, w->jc);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard junk packet count: %m");
++
++                        r = sd_netlink_message_append_u16(message, WGDEVICE_A_JMIN, w->jmin);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard minimum junk packet size: %m");
++
++                        r = sd_netlink_message_append_u16(message, WGDEVICE_A_JMAX, w->jmax);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard maximum junk packet size: %m");
++
++                        r = sd_netlink_message_append_u16(message, WGDEVICE_A_S1, w->s1);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard init packet junk size: %m");
++
++                        r = sd_netlink_message_append_u16(message, WGDEVICE_A_S2, w->s2);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard response packet junk size: %m");
++
++                        r = sd_netlink_message_append_u32(message, WGDEVICE_A_H1, w->h1);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard init packet magic header: %m");
++
++                        r = sd_netlink_message_append_u32(message, WGDEVICE_A_H2, w->h2);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard response packet magic header: %m");
++
++                        r = sd_netlink_message_append_u32(message, WGDEVICE_A_H3, w->h3);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard cookie packet magic header: %m");
++
++                        r = sd_netlink_message_append_u32(message, WGDEVICE_A_H4, w->h4);
++                        if (r < 0)
++                                return log_netdev_error_errno(netdev, r, "Could not append wireguard transport packet magic header: %m");
+                 }
+ 
+                 r = sd_netlink_message_open_container(message, WGDEVICE_A_PEERS);
+diff --git a/src/network/netdev/wireguard.h b/src/network/netdev/wireguard.h
+index 8e5b3b58f5..078a5ea734 100644
+--- a/src/network/netdev/wireguard.h
++++ b/src/network/netdev/wireguard.h
+@@ -32,6 +32,7 @@ typedef struct WireguardPeer {
+         char *preshared_key_file;
+         uint32_t flags;
+         uint16_t persistent_keepalive_interval;
++        bool advanced_security;
+ 
+         union sockaddr_union endpoint;
+         char *endpoint_host;
+@@ -60,6 +61,16 @@ struct Wireguard {
+         uint16_t port;
+         uint32_t fwmark;
+ 
++        uint16_t jc;
++        uint16_t jmin;
++        uint16_t jmax;
++        uint16_t s1;
++        uint16_t s2;
++        uint32_t h1;
++        uint32_t h2;
++        uint32_t h3;
++        uint32_t h4;
++
+         Hashmap *peers_by_section;
+         LIST_HEAD(WireguardPeer, peers);
+ 
+-- 
+2.44.1
+
