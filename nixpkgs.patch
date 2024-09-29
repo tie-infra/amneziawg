@@ -1,0 +1,56 @@
+From 80a36be0bd936adcd8a93038f9e801a73c86c715 Mon Sep 17 00:00:00 2001
+From: Ivan Trubach <mr.trubach@icloud.com>
+Date: Sun, 29 Sep 2024 03:31:13 +0300
+Subject: [PATCH] nixos/networkd: add support for AmneziaWG fields
+
+---
+ nixos/modules/system/boot/networkd.nix | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/nixos/modules/system/boot/networkd.nix b/nixos/modules/system/boot/networkd.nix
+index e000d99cfb48..b39964592175 100644
+--- a/nixos/modules/system/boot/networkd.nix
++++ b/nixos/modules/system/boot/networkd.nix
+@@ -421,9 +421,27 @@ let
+           "FirewallMark"
+           "RouteTable"
+           "RouteMetric"
++          "Jc"
++          "Jmin"
++          "Jmax"
++          "S1"
++          "S2"
++          "H1"
++          "H2"
++          "H3"
++          "H4"
+         ])
+         (assertInt "FirewallMark")
+         (assertRange "FirewallMark" 1 4294967295)
++        (assertInt "Jc")
++        (assertInt "Jmin")
++        (assertInt "Jmax")
++        (assertInt "S1")
++        (assertInt "S2")
++        (assertInt "H1")
++        (assertInt "H2")
++        (assertInt "H3")
++        (assertInt "H4")
+       ];
+ 
+       # NOTE The PresharedKey directive is missing on purpose here, please
+@@ -438,9 +456,11 @@ let
+           "PersistentKeepalive"
+           "RouteTable"
+           "RouteMetric"
++          "AdvancedSecurity"
+         ])
+         (assertInt "PersistentKeepalive")
+         (assertRange "PersistentKeepalive" 0 65535)
++        (assertValueOneOf "AdvancedSecurity" boolValues)
+       ];
+ 
+       sectionBond = checkUnitConfig "Bond" [
+-- 
+2.44.1
+

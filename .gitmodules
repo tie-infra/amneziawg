@@ -7,3 +7,10 @@
 [submodule "amneziawg"]
 	path = amneziawg
 	url = https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git
+[submodule "nixpkgs"]
+	path = nixpkgs-unstable
+	url = https://github.com/NixOS/nixpkgs.git
+[submodule "nixpkgs-2405"]
+	path = nixpkgs-2405
+	url = https://github.com/NixOS/nixpkgs.git
+	branch = nixos-24.05
