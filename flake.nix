@@ -4,6 +4,7 @@
     nixosModules = {
       nixos-unstable = ./modules/unstable.nix;
       nixos-2405 = ./modules/2405.nix;
+      nixos-2411 = ./modules/2411.nix;
     };
   };
 }

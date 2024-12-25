@@ -14,3 +14,7 @@
 	path = nixpkgs-2405
 	url = https://github.com/NixOS/nixpkgs.git
 	branch = nixos-24.05
+[submodule "nixpkgs-2411"]
+	path = nixpkgs-2411
+	url = https://github.com/NixOS/nixpkgs.git
+	branch = nixos-24.11
