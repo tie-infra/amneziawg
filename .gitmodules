@@ -11,15 +11,7 @@
 	path = nixpkgs-unstable
 	url = https://github.com/NixOS/nixpkgs.git
 	branch = nixos-unstable
-[submodule "nixpkgs-2405"]
-	path = nixpkgs-2405
+[submodule "nixpkgs-2511"]
+	path = nixpkgs-2511
 	url = https://github.com/NixOS/nixpkgs.git
-	branch = nixos-24.05
-[submodule "nixpkgs-2411"]
-	path = nixpkgs-2411
-	url = https://github.com/NixOS/nixpkgs.git
-	branch = nixos-24.11
-[submodule "nixpkgs-2505"]
-	path = nixpkgs-2505
-	url = https://github.com/NixOS/nixpkgs.git
-	branch = nixos-25.05
+	branch = nixos-25.11
