@@ -1,3 +1,7 @@
+> [!WARNING]
+> This project will not receive further updates.
+> Consider switching to a different VPN/proxy setup.
+
 # AmneziaWG patches
 
 This project contains [AmneziaWG] patches for [Linux] and [systemd]. Unlike the
